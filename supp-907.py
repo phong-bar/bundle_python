@@ -9,4 +9,3 @@ orders = ['CB-USOUT143455', 'CB-USOUT143153']
 for order in orders:
     bundle.select_order(order_reference=order)
     bundle.update_order_status('cancelled')
-    
