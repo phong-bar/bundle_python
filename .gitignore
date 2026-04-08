@@ -1,2 +1,6 @@
 pyvenv.cfg
 .env
+bin
+include
+lib
+lib64
