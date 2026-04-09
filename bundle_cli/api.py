@@ -53,6 +53,23 @@ class DimensionUnit(Enum):
   IN = "in"
 
 
+def validate_kwargs(kwargs: dict, valid_config: dict):
+  for key, value in kwargs.items():
+    if key not in valid_config:
+      raise KeyError(f"{key} is not allowed for this operation.")
+
+    valid_data = valid_config[key]
+    try:
+      parsed_value = valid_data(value)
+      if isinstance(parsed_value, Enum):
+        kwargs[key] = parsed_value.value
+      else:
+        kwargs[key] = parsed_value
+    except ValueError:
+      valid_values = [e.value for e in valid_data]
+      raise ValueError(f"Invalid value for {key}={kwargs[key]}. Valid data is {valid_values}")
+
+
 class Bundle:
   def __init__(self):
     self.base_url = "https://api.bundle.wayfindr.io"
@@ -231,6 +248,7 @@ class Bundle:
       "price": float
     }
 
+    validate_kwargs(kwargs, valid_config)
     for key, value in kwargs.items:
       if key not in valid_config:
         raise KeyError(f"{key} is not allowed for inventory data update.")
@@ -279,6 +297,7 @@ class Bundle:
       "hs_code": str
     }
 
+    validate_kwargs(kwargs, valid_config)
     for key, value in kwargs.items():
       if key not in valid_config:
         raise KeyError(f"{key} is not allowed for inventory data update.")
@@ -445,7 +464,10 @@ class Bundle:
         return reset_shipment_request.json()
 
 
-  def manage_user(self, user_uuid, add_client: Optional[str] = None, add_clients: Optional[list] = [], remove_client: Optional[str] = None):
+  def manage_user(self, user_uuid, add_client: Optional[str] = None, add_clients: Optional[list] = [], remove_client: Optional[str] = None, remove_clients: Optional[list] = []):
+    '''
+    Manage other users if your role is super-admin or admin. You can add or remove clients for other users, change their role to be either admin, manager, or user, change their timezone.
+    '''
     if self.session_info['data']['role'] not in ['super-admin', 'admin']:
       raise PermissionError
 
@@ -475,7 +497,101 @@ class Bundle:
     print(new_user_info_payload)
     
     if remove_client:
-      pass
+      new_client_list = new_user_info_payload['client_uuid']
+      new_client_list.remove(remove_client)
+      new_user_info_payload['client_uuid'] = new_client_list
+
+    if remove_clients:
+      new_client_list = new_user_info_payload['client_uuid']
+      for client in remove_clients:
+        new_client_list.remove(client)
+      new_user_info_payload['client_uuid'] = new_client_list
+
+    update_user_request = self.session.request(
+      method="PATCH",
+      url=f"{self.base_url}/users-api/admins/{user_uuid}",
+      json=new_user_info_payload
+    )
+    update_user_request.raise_for_status()
+    return update_user_request.json()
+  
+
+  def update_order_details(self, **kwargs):
+    '''
+    Update order details such as recipient name, recipient phone number, delivery address, etc.
+    This function will also try to remove order lines without inventory_uuid because those lines will cause error when updating order. 
+    Removed lines will be returned in case users want to add them back with correct data later.
+    '''
+    
+    if self.order_uuid == None or self.client_uuid == None:
+      return None
+    
+    valid_config = {
+      "billing_address": dict,
+      "shipping_address": dict,
+      "note": str,
+      "incoterms": str,
+      "shipping_preference": str,
+      "special_details": str,
+      "packing_instructions": str,
+      "order_lines": list
+    }
+
+    validate_kwargs(kwargs, valid_config)
+    for key, value in kwargs.items():
+      if key not in valid_config:
+        raise KeyError(f"{key} is not allowed for order details update.")
+
+      valid_data = valid_config[key]
+      try:
+        parsed_value = valid_data(value)
+        kwargs[key] = parsed_value
+      except ValueError:
+        raise ValueError(f"Invalid value for {key}={kwargs[key]}. Valid data type is {valid_data}")
+    
+    self.get_order_details()
+    if self.order_details == None:
+      return None
+    
+    # try to remove order lines without inventory_uuid
+    # because updating order with those lines will cause error.
+    # removed lines will be returned in case users want to add them back with correct data later.
+    new_item_lines_block = []
+    removed_lines = []
+    item_lines_block = self.order_details['data']['order_lines']
+    for line in item_lines_block:
+      if line['inventory_uuid'] != None:
+        new_item_lines_block.append({"inventory_uuid": line['inventory_uuid'], "quantity": line['quantity'], "price": line['price']})
+      else:
+        removed_lines.append(line)
+
+
+    update_order_details_payload = {
+      "billing_address": kwargs.get("billing_address", self.order_details['data']['billing_address']),
+      "shipping_address": kwargs.get("shipping_address", self.order_details['data']['shipping_address']),
+      "note": kwargs.get("note", self.order_details['data']['note']),
+      "incoterms": kwargs.get("incoterms", self.order_details['data']['incoterms']),
+      "shipping_preference": kwargs.get("shipping_preference", self.order_details['data']['shipping_preference']),
+      "special_details": kwargs.get("special_details", self.order_details['data']['special_details']),
+      "packing_instructions": kwargs.get("packing_instructions", self.order_details['data']['packing_instructions']),
+      "order_lines": new_item_lines_block
+    }
+
+    update_order_details_request = self.session.request(
+      method="PATCH",
+      url=f"{self.base_url}/orders-api/clients/{self.client_uuid}/orders/{self.order_uuid}",
+      json=update_order_details_payload
+    )
+    update_order_details_request.raise_for_status()
+    
+    returned_data = {
+      "new_data": update_order_details_request.json()
+    }
+    if len(removed_lines) > 0:
+      returned_data["removed_lines"] = removed_lines
+    
+    return returned_data
+
 
 class WooCommerce:
   def __init__(self):
