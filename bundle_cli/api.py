@@ -479,5 +479,5 @@ class Bundle:
 
 class WooCommerce:
   def __init__(self):
-    TODO: "Make another object for WooCommerce"
+    # TODO: "Make another object for WooCommerce"
     pass
