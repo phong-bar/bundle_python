@@ -328,6 +328,48 @@ class Bundle:
         inventory_item_edit_request.raise_for_status()
         return inventory_item_edit_request.json()
 
+    def get_orders(
+        self,
+        status: Optional[OrderStatus] = None,
+        per_page: Optional[int] = 1000,
+        search: Optional[str] = None,
+    ):
+        """
+        Get all orders for the selected client.
+        """
+
+        if self.client_uuid is None:
+            return None
+        params = {"per_page": per_page}
+        if status:
+            params["status"] = status
+        if search:
+            params["search"] = search
+        while True:
+            get_orders_request = self.session.request(
+                method="GET",
+                url=f"{self.base_url}/orders-api/clients/{self.client_uuid}/orders",
+                params=params,
+            )
+            get_orders_request.raise_for_status()
+            get_orders_response = get_orders_request.json()
+            if (
+                get_orders_response["meta"]["currentPage"]
+                == get_orders_response["meta"]["totalPages"]
+            ):
+                break
+            else:
+                params["page"] = get_orders_response["meta"]["currentPage"] + 1
+                get_orders_request = self.session.request(
+                    method="GET",
+                    url=f"{self.base_url}/orders-api/clients/{self.client_uuid}/orders",
+                    params=params,
+                )
+                get_orders_request.raise_for_status()
+                get_orders_response = get_orders_request.json()
+
+        return get_orders_response
+
     def select_order(
         self, order_uuid: Optional[str] = None, order_reference: Optional[str] = None
     ):
