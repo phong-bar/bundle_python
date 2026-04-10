@@ -4,7 +4,8 @@ import os
 from dotenv import load_dotenv
 from enum import Enum
 
-from typing import Optional
+from typing import Optional, List, Dict, Any
+from pydantic import BaseModel, ValidationError
 
 class BadData(Exception):
   def __init__(self, data_in, accepted_values: list):
@@ -53,21 +54,61 @@ class DimensionUnit(Enum):
   IN = "in"
 
 
-def validate_kwargs(kwargs: dict, valid_config: dict):
-  for key, value in kwargs.items():
-    if key not in valid_config:
-      raise KeyError(f"{key} is not allowed for this operation.")
+class BundleOrderAddress(BaseModel):
+  company: Optional[str] = None
+  first_name: Optional[str] = None
+  last_name: Optional[str] = None
+  phone: Optional[str] = None
+  email: Optional[str] = None
+  address1: Optional[str] = None
+  address2: Optional[str] = None
+  suburb: Optional[str] = None
+  city: Optional[str] = None
+  country_code: Optional[str] = None
+  zip: Optional[str] = None
 
-    valid_data = valid_config[key]
-    try:
-      parsed_value = valid_data(value)
-      if isinstance(parsed_value, Enum):
-        kwargs[key] = parsed_value.value
-      else:
-        kwargs[key] = parsed_value
-    except ValueError:
-      valid_values = [e.value for e in valid_data]
-      raise ValueError(f"Invalid value for {key}={kwargs[key]}. Valid data is {valid_values}")
+class InventoryItemBlueprint(BaseModel):
+  warehouse_uuid: str
+  supplier: str
+  sku: str
+  title: str
+  quantity: int
+  quantity_allocated: int
+  status: InventoryItemStatus
+  weight_unit: WeightUnit
+  weight: float
+  price: float
+
+class InventoryItemUpdate(BaseModel):
+  sku: Optional[str] = None
+  title: Optional[str] = None
+  quantity: Optional[int] = None
+  quantity_allocated: Optional[int] = None
+  status: Optional[InventoryItemStatus] = None
+  weight_unit: Optional[WeightUnit] = None
+  weight: Optional[float] = None
+  price: Optional[float] = None
+  height: Optional[float] = None
+  width: Optional[float] = None
+  depth: Optional[float] = None
+  dimension_unit: Optional[DimensionUnit] = None
+  type: Optional[str] = None
+  hs_code: Optional[str] = None
+
+class OrderLineNode(BaseModel):
+  inventory_uuid: Optional[str] = None
+  quantity: Optional[int] = None
+  price: Optional[float] = None
+
+class OrderDetailsUpdate(BaseModel):
+  billing_address: Optional[BundleOrderAddress] = None
+  shipping_address: Optional[BundleOrderAddress] = None
+  note: Optional[str] = None
+  incoterms: Optional[str] = None
+  shipping_preference: Optional[str] = None
+  special_details: Optional[str] = None
+  packing_instructions: Optional[str] = None
+  order_lines: Optional[List[OrderLineNode]] = None
 
 
 class Bundle:
@@ -127,13 +168,16 @@ class Bundle:
       )
     get_clients_response.raise_for_status()
     if len(get_clients_response.json()['data']) > 0:
-      self.client_list = get_clients_response.json()['data']
-      return self.client_list
+      # self.client_list = get_clients_response.json()['data']
+      return get_clients_response.json()
     else:
       return None
 
   
   def get_client_info(self, client_uuid: Optional[str] = None):
+    """
+    Get client info by client uuid.
+    """
     client_uuid_data = self.client_uuid if client_uuid is None else client_uuid
     if client_uuid_data is None:
       return None
@@ -143,8 +187,8 @@ class Bundle:
       url=f"{self.base_url}/clients-api/admin/clients/{client_uuid_data}"
     )
     get_client_info_request.raise_for_status()
-    self.client_info = get_client_info_request.json()["data"]
-    return self.client_info
+    # self.client_info = get_client_info_request.json()["data"]
+    return get_client_info_request.json()
 
 
 
@@ -172,7 +216,7 @@ class Bundle:
     elif client_uuid:
       self.client_uuid = client_uuid
     
-    self.get_client_info()
+    return self.get_client_info()
 
 
   # search for inventory item and select if one found
@@ -230,93 +274,41 @@ class Bundle:
       return update_result
 
 
-  def create_inventory_item(self, **kwargs):
+  def create_inventory_item(self, params: Optional[InventoryItemBlueprint] = None, **kwargs):
     """
     Create an inventory item
     """
-    # set a template
-    valid_config = {
-      "warehouse_uuid": str,
-      "supplier": str,
-      "sku": str,
-      "title": str,
-      "quantity": int,
-      "quantity_allocated": int,
-      "status": InventoryItemStatus,
-      "weight_unit": WeightUnit,
-      "weight": float,
-      "price": float
-    }
+    if params is None:
+      params = InventoryItemBlueprint.model_validate(kwargs)
 
-    validate_kwargs(kwargs, valid_config)
-    for key, value in kwargs.items():
-      if key not in valid_config:
-        raise KeyError(f"{key} is not allowed for inventory data update.")
-
-    valid_data = valid_config[key]
-    try:
-      parsed_value = valid_data(value)
-      if isinstance(parsed_value, Enum):
-        kwargs[key] = parsed_value.value
-      else:
-        kwargs[key] = parsed_value
-    except ValueError:
-      valid_values = [e.value for e in valid_data]
-      raise ValueError(f"Invalid value for {key}={kwargs[key]}. Valid data is {valid_values}")
+    edit_payload = params.model_dump(exclude_unset=True, mode='json')
 
     if self.client_uuid is None:
       return None
 
-    # TODO: "actual logic"
+    create_inventory_item_request = self.session.request(
+      method="POST",
+      url=f"{self.base_url}/orders-api/clients/{self.client_uuid}/products",
+      json=edit_payload
+    )
+    create_inventory_item_request.raise_for_status()
+    return create_inventory_item_request.json()
 
 
   def update_inventory_item_data(
-    self, **kwargs):
+    self, params: Optional[InventoryItemUpdate] = None, **kwargs):
     """
     Update selected inventory item
     """
-    
-    # set a template
-    valid_config = {
-      "warehouse_uuid": str,
-      "supplier": str,
-      "supplier_region": str,
-      "sku": str,
-      "title": str,
-      "quantity": int,
-      "quantity_allocated": int,
-      "status": InventoryItemStatus,
-      "weight_unit": WeightUnit,
-      "weight": float,
-      "price": float,
-      "height": float,
-      "width": float,
-      "depth": float,
-      "dimension_unit": DimensionUnit,
-      "type": str,
-      "hs_code": str
-    }
-
-    validate_kwargs(kwargs, valid_config)
-    for key, value in kwargs.items():
-      if key not in valid_config:
-        raise KeyError(f"{key} is not allowed for inventory data update.")
-
-      valid_data = valid_config[key]
-      try:
-        parsed_value = valid_data(value)
-        if isinstance(parsed_value, Enum):
-          kwargs[key] = parsed_value.value
-        else:
-          kwargs[key] = parsed_value
-      except ValueError:
-        valid_values = [e.value for e in valid_data]
-        raise ValueError(f"Invalid value for {key}={kwargs[key]}. Valid data is {valid_values}")
+    if params is None:
+      params = InventoryItemUpdate.model_validate(kwargs)
+      
+    validated_kwargs = params.model_dump(exclude_unset=True, mode='json')
       
     if self.inventory_item_uuid is None or self.client_uuid is None:
       return None
 
-    edit_payload = kwargs
+    edit_payload = validated_kwargs
     inventory_item_edit_request = self.session.request(
       method="patch",
       url=f"{self.base_url}/orders-api/clients/{self.client_uuid}/products/{self.inventory_item_uuid}",
@@ -504,7 +496,8 @@ class Bundle:
     if remove_clients:
       new_client_list = new_user_info_payload['client_uuid']
       for client in remove_clients:
-        new_client_list.remove(client)
+        if client in new_client_list:
+          new_client_list.remove(client)
       new_user_info_payload['client_uuid'] = new_client_list
 
     update_user_request = self.session.request(
@@ -516,38 +509,19 @@ class Bundle:
     return update_user_request.json()
   
 
-  def update_order_details(self, **kwargs):
+  def update_order_details(self, params: Optional[OrderDetailsUpdate] = None, **kwargs):
     """
     Update order details such as recipient name, recipient phone number, delivery address, etc.
     This function will also try to remove order lines without inventory_uuid because those lines will cause error when updating order. 
     Removed lines will be returned in case users want to add them back with correct data later.
     """
+    if params is None:
+      params = OrderDetailsUpdate.model_validate(kwargs)
+      
+    validated_kwargs = params.model_dump(exclude_unset=True, mode='json')
     
     if self.order_uuid is None or self.client_uuid is None:
       return None
-    
-    valid_config = {
-      "billing_address": dict,
-      "shipping_address": dict,
-      "note": str,
-      "incoterms": str,
-      "shipping_preference": str,
-      "special_details": str,
-      "packing_instructions": str,
-      "order_lines": list
-    }
-
-    validate_kwargs(kwargs, valid_config)
-    for key, value in kwargs.items():
-      if key not in valid_config:
-        raise KeyError(f"{key} is not allowed for order details update.")
-
-      valid_data = valid_config[key]
-      try:
-        parsed_value = valid_data(value)
-        kwargs[key] = parsed_value
-      except ValueError:
-        raise ValueError(f"Invalid value for {key}={kwargs[key]}. Valid data type is {valid_data}")
     
     self.get_order_details()
     if self.order_details is None:
@@ -567,13 +541,13 @@ class Bundle:
 
 
     update_order_details_payload = {
-      "billing_address": kwargs.get("billing_address", self.order_details['data']['billing_address']),
-      "shipping_address": kwargs.get("shipping_address", self.order_details['data']['shipping_address']),
-      "note": kwargs.get("note", self.order_details['data']['note']),
-      "incoterms": kwargs.get("incoterms", self.order_details['data']['incoterms']),
-      "shipping_preference": kwargs.get("shipping_preference", self.order_details['data']['shipping_preference']),
-      "special_details": kwargs.get("special_details", self.order_details['data']['special_details']),
-      "packing_instructions": kwargs.get("packing_instructions", self.order_details['data']['packing_instructions']),
+      "billing_address": validated_kwargs.get("billing_address", self.order_details['data']['billing_address']),
+      "shipping_address": validated_kwargs.get("shipping_address", self.order_details['data']['shipping_address']),
+      "note": validated_kwargs.get("note", self.order_details['data']['note']),
+      "incoterms": validated_kwargs.get("incoterms", self.order_details['data']['incoterms']),
+      "shipping_preference": validated_kwargs.get("shipping_preference", self.order_details['data']['shipping_preference']),
+      "special_details": validated_kwargs.get("special_details", self.order_details['data']['special_details']),
+      "packing_instructions": validated_kwargs.get("packing_instructions", self.order_details['data']['packing_instructions']),
       "order_lines": new_item_lines_block
     }
 
