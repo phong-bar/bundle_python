@@ -94,10 +94,10 @@ class Bundle:
     self.cooldown = 1
 
   def login(self, username: Optional[str] = None, password: Optional[str] = None):
-    '''
+    """
     Authenticate user and update session headers with the access token.
-    '''
-    if username == None or password == None:
+    """
+    if username is None or password is None:
       load_dotenv()
       username = os.getenv("BUNDLE_USERNAME")
       password = os.getenv("BUNDLE_PASSWORD")
@@ -117,9 +117,9 @@ class Bundle:
     }
 
   def get_clients(self):
-    '''
+    """
     Get all the clients (limit: 1000, maybe this should be updated in 2050)
-    '''
+    """
     get_clients_response = self.session.request(
     method="GET",
     url=f"{self.base_url}/clients-api/admin/clients",
@@ -134,8 +134,8 @@ class Bundle:
 
   
   def get_client_info(self, client_uuid: Optional[str] = None):
-    client_uuid_data = self.client_uuid if client_uuid == None else client_uuid
-    if client_uuid_data == None:
+    client_uuid_data = self.client_uuid if client_uuid is None else client_uuid
+    if client_uuid_data is None:
       return None
 
     get_client_info_request = self.session.request(
@@ -149,9 +149,9 @@ class Bundle:
 
 
   def select_client(self, client_uuid: Optional[str] = None, search_for_client_name: Optional[str] = None):
-    '''
+    """
     Select one client by uuid or client name.
-    '''
+    """
     if search_for_client_name:
       search_for_client_response = self.session.request(
           method="GET",
@@ -177,9 +177,9 @@ class Bundle:
 
   # search for inventory item and select if one found
   def select_inventory_item(self, inventory_item_uuid: Optional[str] = None, SKU_name: Optional[str] = None, supplier_tag: Optional[str] = None):
-    '''
+    """
     Select one inventory item based on uuid or SKU name.
-    '''
+    """
     if inventory_item_uuid:
       self.inventory_item_uuid = inventory_item_uuid
       # print("Inventory item", self.inventory_item_uuid, "selected.")
@@ -216,9 +216,9 @@ class Bundle:
 
   # update sku qty
   def update_sku_qty(self, qty: int):
-    '''
+    """
     update the inventory qty of selected SKU
-    '''
+    """
     if self.client_uuid and self.inventory_item_uuid:
       update_sku_qty_response = self.session.request(
           method="PATCH",
@@ -231,9 +231,9 @@ class Bundle:
 
 
   def create_inventory_item(self, **kwargs):
-    '''
+    """
     Create an inventory item
-    '''
+    """
     # set a template
     valid_config = {
       "warehouse_uuid": str,
@@ -249,7 +249,7 @@ class Bundle:
     }
 
     validate_kwargs(kwargs, valid_config)
-    for key, value in kwargs.items:
+    for key, value in kwargs.items():
       if key not in valid_config:
         raise KeyError(f"{key} is not allowed for inventory data update.")
 
@@ -264,7 +264,7 @@ class Bundle:
       valid_values = [e.value for e in valid_data]
       raise ValueError(f"Invalid value for {key}={kwargs[key]}. Valid data is {valid_values}")
 
-    if self.client_uuid == None:
+    if self.client_uuid is None:
       return None
 
     # TODO: "actual logic"
@@ -272,9 +272,9 @@ class Bundle:
 
   def update_inventory_item_data(
     self, **kwargs):
-    '''
+    """
     Update selected inventory item
-    '''
+    """
     
     # set a template
     valid_config = {
@@ -313,7 +313,7 @@ class Bundle:
         valid_values = [e.value for e in valid_data]
         raise ValueError(f"Invalid value for {key}={kwargs[key]}. Valid data is {valid_values}")
       
-    if self.inventory_item_uuid == None or self.client_uuid == None:
+    if self.inventory_item_uuid is None or self.client_uuid is None:
       return None
 
     edit_payload = kwargs
@@ -326,9 +326,9 @@ class Bundle:
     return inventory_item_edit_request.json()
 
   def select_order(self, order_uuid: Optional[str] = None, order_reference: Optional[str] = None):
-    '''
+    """
     Select an order by UUID or search for an order reference and select that order if only one result found.
-    '''
+    """
     if order_uuid:
       self.order_uuid = order_uuid
     elif order_reference:
@@ -351,10 +351,10 @@ class Bundle:
   
   
   def get_order_details(self):
-    '''
+    """
     Get all order details if order_uuid is selected.
-    '''
-    if self.order_uuid == None or self.client_uuid == None:
+    """
+    if self.order_uuid is None or self.client_uuid is None:
       return None
     else:
       get_order_request = self.session.request(
@@ -367,10 +367,10 @@ class Bundle:
 
 
   def get_order_api_logs(self):
-    '''
+    """
     Get all order's api logs
-    '''
-    if self.order_uuid == None or self.client_uuid == None:
+    """
+    if self.order_uuid is None or self.client_uuid is None:
       return None
     else:
       self.order_api_logs = []
@@ -395,13 +395,13 @@ class Bundle:
 
 
   def update_order_status(self, status):
-    '''
+    """
     Update the order status to either Pending, Created, In Progress, Finalised, Cancelled
-    '''
+    """
     accepted_values = ['pending', 'created', 'in_progress', 'finalised', 'cancelled']
     if status not in accepted_values:
       raise BadData(status, accepted_values)
-    elif self.order_uuid == None or self.client_uuid == None:
+    elif self.order_uuid is None or self.client_uuid is None:
       return None
     else:
       update_order_status_request = self.session.request(
@@ -414,9 +414,9 @@ class Bundle:
 
 
   def get_shipment_list(self, status: Optional[str] = None):
-    '''
+    """
     Get shipment list. Accepted status: 'created', 'in_transit', 'delivered', 'exception'
-    '''
+    """
     accepted_values = ['created', 'in_transit', 'delivered', 'exception']
     
     if status is not None and status not in accepted_values:
@@ -426,7 +426,7 @@ class Bundle:
     if status is not None:
       params.update({"status": status})
 
-    if self.client_uuid == None:
+    if self.client_uuid is None:
       return None
     else:
       data = []
@@ -445,11 +445,11 @@ class Bundle:
           params.update({"page": metadata['currentPage']+1})
 
   def reset_shipment(self):
-    '''
+    """
     Reset selected shipment and put it back to "in_transit".
-    '''
+    """
 
-    if self.shipment_uuid == None:
+    if self.shipment_uuid is None:
       return None
     else:
       reset_shipment_request = self.session.request(
@@ -464,10 +464,10 @@ class Bundle:
         return reset_shipment_request.json()
 
 
-  def manage_user(self, user_uuid, add_client: Optional[str] = None, add_clients: Optional[list] = [], remove_client: Optional[str] = None, remove_clients: Optional[list] = []):
-    '''
+  def manage_user(self, user_uuid, add_client: Optional[str] = None, add_clients: Optional[list] = None, remove_client: Optional[str] = None, remove_clients: Optional[list] = None):
+    """
     Manage other users if your role is super-admin or admin. You can add or remove clients for other users, change their role to be either admin, manager, or user, change their timezone.
-    '''
+    """
     if self.session_info['data']['role'] not in ['super-admin', 'admin']:
       raise PermissionError
 
@@ -517,13 +517,13 @@ class Bundle:
   
 
   def update_order_details(self, **kwargs):
-    '''
+    """
     Update order details such as recipient name, recipient phone number, delivery address, etc.
     This function will also try to remove order lines without inventory_uuid because those lines will cause error when updating order. 
     Removed lines will be returned in case users want to add them back with correct data later.
-    '''
+    """
     
-    if self.order_uuid == None or self.client_uuid == None:
+    if self.order_uuid is None or self.client_uuid is None:
       return None
     
     valid_config = {
@@ -550,7 +550,7 @@ class Bundle:
         raise ValueError(f"Invalid value for {key}={kwargs[key]}. Valid data type is {valid_data}")
     
     self.get_order_details()
-    if self.order_details == None:
+    if self.order_details is None:
       return None
     
     # try to remove order lines without inventory_uuid
