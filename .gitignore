@@ -28,3 +28,4 @@ ENV/
 build/
 dist/
 *.egg-info/
+*.xlsx
