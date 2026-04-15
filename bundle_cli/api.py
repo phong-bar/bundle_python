@@ -367,6 +367,7 @@ class Bundle:
                 )
                 get_orders_request.raise_for_status()
                 get_orders_response = get_orders_request.json()
+            time.sleep(random.uniform(1.0, 2.0))
 
         return get_orders_response
 
