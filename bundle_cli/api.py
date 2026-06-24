@@ -6,6 +6,7 @@ from enum import Enum
 
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, ValidationError
+from datetime import date
 
 
 class BadData(Exception):
@@ -107,6 +108,7 @@ class OrderLineNode(BaseModel):
 
 
 class OrderDetailsUpdate(BaseModel):
+    currency: Optional[str] = None
     billing_address: Optional[BundleOrderAddress] = None
     shipping_address: Optional[BundleOrderAddress] = None
     note: Optional[str] = None
@@ -333,6 +335,8 @@ class Bundle:
         status: Optional[OrderStatus] = None,
         per_page: Optional[int] = 1000,
         search: Optional[str] = None,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None
     ):
         """
         Get all orders for the selected client.
@@ -345,6 +349,10 @@ class Bundle:
             params["status"] = status
         if search:
             params["search"] = search
+        if start_date:
+            params["start"] = start_date.isoformat() + "T00:00:00.000Z"
+        if end_date:
+            params["end"] = end_date.isoformat() + "T00:00:00.000Z"
         while True:
             get_orders_request = self.session.request(
                 method="GET",
@@ -355,7 +363,7 @@ class Bundle:
             get_orders_response = get_orders_request.json()
             if (
                 get_orders_response["meta"]["currentPage"]
-                == get_orders_response["meta"]["totalPages"]
+                >= get_orders_response["meta"]["totalPages"]
             ):
                 break
             else:
@@ -394,7 +402,7 @@ class Bundle:
                 )
             else:
                 raise NoResults(order_reference)
-        return search_result["data"][0]
+            return search_result["data"][0]
 
     def get_order_details(self):
         """
@@ -589,6 +597,9 @@ class Bundle:
         self.get_order_details()
         if self.order_details is None:
             return None
+        
+        if self.order_details["data"]["status"] != OrderStatus.CREATED.value:
+            raise ValueError(f"Order {self.order_uuid} is not in CREATED status. Current status: {self.order_details['data']['status']}. Only orders in CREATED status can be updated.")
 
         # try to remove order lines without inventory_uuid
         # because updating order with those lines will cause error.
@@ -630,8 +641,13 @@ class Bundle:
                 self.order_details["data"]["packing_instructions"],
             ),
             "order_lines": new_item_lines_block,
+            "currency": validated_kwargs.get(
+                "currency", self.order_details["data"]["currency"]
+            )
         }
 
+        print(f"Updating order {self.order_uuid} with payload: {update_order_details_payload}")
+        input("Press Enter to continue...")
         update_order_details_request = self.session.request(
             method="PATCH",
             url=f"{self.base_url}/orders-api/clients/{self.client_uuid}/orders/{self.order_uuid}",
