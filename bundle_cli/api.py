@@ -592,12 +592,13 @@ class Bundle:
         validated_kwargs = params.model_dump(exclude_unset=True, mode="json")
 
         if self.order_uuid is None or self.client_uuid is None:
-            return None
+            raise ValueError("Order or client UUID is not set.")
 
         self.get_order_details()
         if self.order_details is None:
-            return None
+            raise ValueError(f"Order {self.order_uuid} details could not be retrieved.")
         
+        # check if order is in CREATED status before updating; otherwise, raise an error
         if self.order_details["data"]["status"] != OrderStatus.CREATED.value:
             raise ValueError(f"Order {self.order_uuid} is not in CREATED status. Current status: {self.order_details['data']['status']}. Only orders in CREATED status can be updated.")
 

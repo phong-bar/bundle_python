@@ -16,8 +16,12 @@ python -m bundle_cli.main search-order "Client Name" "OrderRef"
 ## Atlassian
 
 - Jira/Confluence cloud ID: `19df032c-98d3-40a7-a2c9-c86982f6f341`
+- When the user mentions "SUPP-XXX", it refers to a Jira ticket in the SUPP project.
 - When creating BUN tickets for Phong Nguyen, always set `customfield_10182` (Team) to `Customer support`
 - When replying to SUPP tickets, keep it professional but use simple words — write as if the requester is 15 years old. Avoid technical jargon or deep system explanations.
+- Always set the ticket status to "Investigating" before interacting with a ticket. Halt and wait for user input if it's not feasible.
+- When a SUPP ticket needs escalation to the engineering team, write a BUN ticket with detailed explanation of what needs to be done on the backend/database. Provide as much context as you can from the SUPP ticket and prompt the user if necessary. After creating the BUN ticket, mark the SUPP ticket as In Backlog with the flow: To Do → Investigating → In Backlog.
+- When marking a SUPP ticket as Done, always try to fill `customfield_10002` (Request participant organization) with the client organization if it's empty. Prompt the user if it's unclear.
 
 ## Setup
 
